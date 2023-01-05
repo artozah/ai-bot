@@ -2,6 +2,7 @@ import express from 'express'
 import * as dotenv from 'dotenv'
 import cors from 'cors'
 import { Configuration, OpenAIApi } from 'openai'
+import { v2 } from '@google-cloud/translate'
 
 dotenv.config()
 
@@ -10,6 +11,11 @@ const configuration = new Configuration({
 });
 
 const openai = new OpenAIApi(configuration);
+
+const translate = new v2.Translate({
+  projectId: process.env.CLOUD_PROJECT_ID,
+  keyFilename: 'ai-bot.json'
+});
 
 const app = express()
 app.use(cors())
@@ -23,7 +29,7 @@ app.get('/', async (req, res) => {
 
 app.post('/', async (req, res) => {
   try {
-    const prompt = req.body.prompt;
+    const [prompt] = await translate.translate(req.body.prompt, 'en');
 
     const response = await openai.createCompletion({
       model: "text-davinci-003",
@@ -35,13 +41,15 @@ app.post('/', async (req, res) => {
       presence_penalty: 0, // Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
     });
 
+    const [botText] = await translate.translate(response.data.choices[0].text, 'ru');
+
     res.status(200).send({
-      bot: response.data.choices[0].text
+      bot: botText
     });
 
   } catch (error) {
     console.error(error)
-    res.status(500).send(error || 'Something went wrong');
+    res.status(500).send(error || 'Щось пішло не так...');
   }
 })
 

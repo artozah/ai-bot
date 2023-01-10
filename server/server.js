@@ -1,10 +1,10 @@
-import express from 'express'
-import * as dotenv from 'dotenv'
-import cors from 'cors'
-import { Configuration, OpenAIApi } from 'openai'
-import { v2 } from '@google-cloud/translate'
+import express from 'express';
+import * as dotenv from 'dotenv';
+import cors from 'cors';
+import { Configuration, OpenAIApi } from 'openai';
+import { v2 } from '@google-cloud/translate';
 
-dotenv.config()
+dotenv.config();
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -14,25 +14,26 @@ const openai = new OpenAIApi(configuration);
 
 const translate = new v2.Translate({
   projectId: process.env.CLOUD_PROJECT_ID,
-  keyFilename: 'ai-bot.json'
+  keyFilename: 'ai-bot.json',
 });
 
-const app = express()
-app.use(cors())
-app.use(express.json())
+const app = express();
+app.use(cors());
+app.use(express.json());
 
 app.get('/', async (req, res) => {
   res.status(200).send({
-    message: 'Hello from CodeX!'
-  })
-})
+    message: 'Hello from AI BOT!',
+  });
+});
 
 app.post('/', async (req, res) => {
   try {
-    const [prompt] = await translate.translate(req.body.prompt, 'en');
+    const [detections] = await translate.detect(req.body.prompt);
+    const [prompt] = detections.language === 'en' ? [req.body.prompt] : await translate.translate(req.body.prompt, 'en');
 
     const response = await openai.createCompletion({
-      model: "text-davinci-003",
+      model: 'text-davinci-003',
       prompt: `${prompt}`,
       temperature: 0, // Higher values means the model will take more risks.
       max_tokens: 3000, // The maximum number of tokens to generate in the completion. Most models have a context length of 2048 tokens (except for the newest models, which support 4096).
@@ -41,16 +42,18 @@ app.post('/', async (req, res) => {
       presence_penalty: 0, // Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
     });
 
-    const [botText] = await translate.translate(response.data.choices[0].text, 'ru');
+    const [botText] =
+      detections.language === 'en'
+        ? [response.data.choices[0].text]
+        : await translate.translate(response.data.choices[0].text, detections.language);
 
     res.status(200).send({
-      bot: botText
+      bot: botText,
     });
-
   } catch (error) {
-    console.error(error)
+    console.error(error);
     res.status(500).send(error || 'Щось пішло не так...');
   }
-})
+});
 
-app.listen(5000, () => console.log('AI server started on http://localhost:5000'))
+app.listen(5000, () => console.log('AI server started on http://localhost:5000'));
